@@ -70,7 +70,7 @@ body{
   font-size:17px; text-align:center; line-height:1.3; pointer-events:none; z-index:20;
 }
 .joy{
-  position:absolute; width:96px; height:96px; margin:-48px 0 0 -48px; border-radius:50%;
+  position:absolute; width:120px; height:120px; margin:-60px 0 0 -60px; border-radius:50%;
   border:2px solid rgba(255,255,255,.7); background:rgba(255,255,255,.14); pointer-events:none;
 }
 .joy .knob{
@@ -344,7 +344,7 @@ const ITEMS = {
   baby:   { name:'베이비 버그',  unlock:5,  max:10, count: BABY_COUNT,
             desc:'바라보는 방향으로 아기 무당벌레를 연달아 쏴요. 쏘는 순간의 내 속도로 날아가요.' },
   pill:   { name:'콩벌레',      unlock:6,  max:10, dur: seq(70,5,10),
-            desc:'먹는 순간 내가 가던 방향과 속도로 거대한 콩벌레를 굴려요. 벽에 5번까지 튕겨요.' },
+            desc:'부딪힌 방향과 속도대로 거대한 콩벌레가 굴러가요. 천천히 부딪히면 천천히, 세게 부딪히면 빠르게 날아가요. 벽에 5번까지 튕겨요.' },
   baby2:  { name:'베이비 버그2', unlock:15, max:10, count: BABY_COUNT,
             desc:'나를 중심으로 아기 무당벌레가 시계 방향으로 빠르게 쏟아져 나와요.' },
   cosmos: { name:'코스모스',    unlock:25, max:6,  count:[3,4,5,6,7,8], dur:[30,35,40,45,50,55],
@@ -354,7 +354,7 @@ const ITEMS = {
   clone:  { name:'분신',        unlock:50, max:10, speed:[20,18,16,14,12,10,8,7,6,5],
             desc:'내 분신이 천천히 위로 올라가며 적을 없애요. 새로 나오는 적들은 분신을 쫓아가요.' }
 };
-const BUG_S = 1.35, ENEMY_S = 1.4, LEAF_S = 1.3;   // 무당벌레, 적, 나뭇잎 크기 배율
+const BUG_S = 1.6, ENEMY_S = 1.4, LEAF_S = 1.3;   // 무당벌레, 적, 나뭇잎 크기 배율
 const COSMOS_SLOTS = [[0,-2],[-1,-1],[1,-1],[1,1],[0,2],[-1,1],[2,0],[-2,0]];
 function statText(k, lv){
   const it = ITEMS[k], i = lv - 1, parts = [];
@@ -416,7 +416,7 @@ let enemies = [], field = [], flowers = [], leaves = [], bees = [], babies = [],
 const idle = { t: 0, x: LW / 2, y: 500, ang: 0, walk: 0 };
 
 function newBug(){
-  return { x: LW / 2, y: LH * 0.75, vx: 0, vy: 0, ang: -Math.PI / 2, r: 11, walk: 0, dead: false,
+  return { x: LW / 2, y: LH * 0.75, vx: 0, vy: 0, ang: -Math.PI / 2, r: 13, walk: 0, dead: false,
            shieldT: 0, babyAmmo: 0, babyT: 0, baby2Left: 0, baby2T: 0, baby2Ang: 0 };
 }
 
@@ -427,7 +427,7 @@ function resize(){
   dpr = Math.min(window.devicePixelRatio || 1, 2.5);
   scale = w / LW; LH = h / scale;
   canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
-  bug.x = clamp(bug.x, 14, LW - 14); bug.y = clamp(bug.y, 14, LH - 14);
+  bug.x = clamp(bug.x, 17, LW - 17); bug.y = clamp(bug.y, 17, LH - 17);
   renderLawn();
 }
 function renderLawn(){
@@ -623,9 +623,23 @@ function tiltVector(){
   if (ang === 90){ x = o.db; y = -o.dg; }
   else if (ang === -90 || ang === 270){ x = -o.db; y = o.dg; }
   else if (ang === 180){ x = -o.dg; y = -o.db; }
-  const R = 22;
-  const vx = clamp(x / R, -1, 1), vy = clamp(y / R, -1, 1);
-  return Math.hypot(vx, vy) < 0.07 ? [0, 0] : [vx, vy];
+  return withFactor(x, y, tiltFactor(Math.hypot(x, y)));
+}
+// 기울기 각도 → 속도 배율: 2.5° 이하 정지, 30°에서 1배, 90°까지 계속 빨라져 3배
+function tiltFactor(deg){
+  if (deg <= 2.5) return 0;
+  if (deg <= 30) return Math.pow((deg - 2.5) / 27.5, 1.3);
+  return 1 + 2 * Math.min(1, (deg - 30) / 60);
+}
+// 터치로 끈 거리(px)를 기울기 각도로 바꿈: 55px = 30°, 120px = 90°(최고 속도)
+function dragToDeg(d){
+  if (d <= 4) return 0;
+  if (d <= 55) return 2.5 + (d - 4) / 51 * 27.5;
+  return 30 + Math.min(1, (d - 55) / 65) * 60;
+}
+function withFactor(x, y, f){
+  const m = Math.hypot(x, y);
+  return m && f ? [x / m * f, y / m * f] : [0, 0];
 }
 function readInput(){
   let kx = 0, ky = 0;
@@ -633,12 +647,10 @@ function readInput(){
   if (keys.ArrowRight || keys.KeyD) kx += 1;
   if (keys.ArrowUp || keys.KeyW) ky -= 1;
   if (keys.ArrowDown || keys.KeyS) ky += 1;
-  if (kx || ky){ const m = Math.hypot(kx, ky); return [kx / m, ky / m]; }
+  if (kx || ky){ const m = Math.hypot(kx, ky); return [kx / m * 0.7, ky / m * 0.7]; }
   if (useTouch){
     if (!joy) return [0, 0];
-    let x = joy.dx / 50, y = joy.dy / 50; const m = Math.hypot(x, y);
-    if (m > 1){ x /= m; y /= m; }
-    return m < 0.08 ? [0, 0] : [x, y];
+    return withFactor(joy.dx, joy.dy, tiltFactor(dragToDeg(Math.hypot(joy.dx, joy.dy))));
   }
   return tiltVector();
 }
@@ -656,8 +668,8 @@ window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; }
 function placeJoy(){
   const r = app.getBoundingClientRect();
   joyEl.style.left = (joy.ox - r.left) + 'px'; joyEl.style.top = (joy.oy - r.top) + 'px';
-  let x = joy.dx, y = joy.dy; const m = Math.hypot(x, y);
-  if (m > 50){ x = x / m * 50; y = y / m * 50; }
+  const m = Math.hypot(joy.dx, joy.dy), k = m > 0 ? Math.min(m, 120) / 2 / m : 0;
+  const x = joy.dx * k, y = joy.dy * k;
   knobEl.style.transform = 'translate(' + x + 'px,' + y + 'px)';
 }
 canvas.addEventListener('pointerdown', e => {
@@ -816,15 +828,18 @@ function activate(kind){
   } else if (kind === 'baby'){
     bug.babyAmmo += it.count[i];
   } else if (kind === 'pill'){
-    let vx = bug.vx * 1.3, vy = bug.vy * 1.3;
-    if (Math.hypot(vx, vy) < 60){ vx = Math.cos(bug.ang) * 60; vy = Math.sin(bug.ang) * 60; }
+    // 부딪힌 속도만큼 날아감: 천천히 부딪히면 천천히, 세게 부딪히면 빠르게
+    let vx = bug.vx * 1.4, vy = bug.vy * 1.4;
+    const sp = Math.hypot(vx, vy);
+    if (sp > 900){ vx = vx / sp * 900; vy = vy / sp * 900; }
+    else if (sp < 20){ vx = Math.cos(bug.ang) * 20; vy = Math.sin(bug.ang) * 20; }
     pills.push({ x: bug.x, y: bug.y, vx, vy, r: 24, b: 0, t: 0, dur: it.dur[i] / 10, rot: 0 });
   } else if (kind === 'baby2'){
     if (bug.baby2Left <= 0){ bug.baby2Ang = -Math.PI / 2 - TAU / 12; bug.baby2T = 0; }
     bug.baby2Left += it.count[i];
   } else if (kind === 'cosmos'){
     const slots = COSMOS_SLOTS.slice(0, it.count[i]);
-    cosmosSets.push({ slots, t: 0, dur: it.dur[i] / 10, phase: 'guard', fl: slots.map(s => ({ x: bug.x + s[0] * 26, y: bug.y + s[1] * 26 })) });
+    cosmosSets.push({ slots, t: 0, dur: it.dur[i] / 10, phase: 'guard', fl: slots.map(s => ({ x: bug.x + s[0] * 30, y: bug.y + s[1] * 30 })) });
   } else if (kind === 'cosmos2'){
     const n = it.count[i], r = LW / (2 * n) + 6;
     for (let j = 0; j < n; j++) cosmos2.push({ x: (j + 0.5) * LW / n, y: LH + r + 10, r, rot: rand(0, TAU) });
@@ -837,15 +852,15 @@ function activate(kind){
 
 /* ---------- 업데이트 ---------- */
 function updateBug(dt){
-  const maxSp = 110 + settings.speed * 35;
+  const maxSp = 150 + settings.speed * 50;   // 30° 기준 속도(속도 3이면 300), 90°에서는 이 값의 3배
   const inp = readInput(), k = Math.min(1, dt * 8);
   bug.vx += (inp[0] * maxSp - bug.vx) * k;
   bug.vy += (inp[1] * maxSp - bug.vy) * k;
   bug.x += bug.vx * dt; bug.y += bug.vy * dt;
-  if (bug.x < 14){ bug.x = 14; if (bug.vx < 0) bug.vx = 0; }
-  if (bug.x > LW - 14){ bug.x = LW - 14; if (bug.vx > 0) bug.vx = 0; }
-  if (bug.y < 14){ bug.y = 14; if (bug.vy < 0) bug.vy = 0; }
-  if (bug.y > LH - 14){ bug.y = LH - 14; if (bug.vy > 0) bug.vy = 0; }
+  if (bug.x < 17){ bug.x = 17; if (bug.vx < 0) bug.vx = 0; }
+  if (bug.x > LW - 17){ bug.x = LW - 17; if (bug.vx > 0) bug.vx = 0; }
+  if (bug.y < 17){ bug.y = 17; if (bug.vy < 0) bug.vy = 0; }
+  if (bug.y > LH - 17){ bug.y = LH - 17; if (bug.vy > 0) bug.vy = 0; }
   const sp = Math.hypot(bug.vx, bug.vy);
   if (sp > 18){ const a = Math.atan2(bug.vy, bug.vx); bug.ang += angDiff(a, bug.ang) * Math.min(1, dt * 12); }
   // 멈추면 마지막으로 바라보던 방향 그대로 가만히 있음
@@ -858,7 +873,7 @@ function updateBug(dt){
       bug.babyT = 0.08; bug.babyAmmo--;
       const c = Math.cos(bug.ang), s = Math.sin(bug.ang);
       const vx = bug.vx * 1.15 + c * 25, vy = bug.vy * 1.15 + s * 25;
-      babies.push({ x: bug.x + c * 17, y: bug.y + s * 17, vx, vy, t: 0, ang: bug.ang });
+      babies.push({ x: bug.x + c * 20, y: bug.y + s * 20, vx, vy, t: 0, ang: bug.ang });
     }
   }
   if (bug.baby2Left > 0){
@@ -866,7 +881,7 @@ function updateBug(dt){
     while (bug.baby2T <= 0 && bug.baby2Left > 0){
       bug.baby2T += 0.035; bug.baby2Left--; bug.baby2Ang += TAU / 12;
       const a = bug.baby2Ang;
-      babies.push({ x: bug.x + Math.cos(a) * 16, y: bug.y + Math.sin(a) * 16, vx: Math.cos(a) * 380, vy: Math.sin(a) * 380, t: 0, ang: a });
+      babies.push({ x: bug.x + Math.cos(a) * 19, y: bug.y + Math.sin(a) * 19, vx: Math.cos(a) * 380, vy: Math.sin(a) * 380, t: 0, ang: a });
     }
   }
 }
@@ -952,7 +967,7 @@ function updateEffects(dt){
   for (const s of cosmosSets){
     s.t += dt;
     if (s.phase === 'guard'){
-      s.slots.forEach((sl, j) => { s.fl[j].x = bug.x + sl[0] * 26; s.fl[j].y = bug.y + sl[1] * 26; });
+      s.slots.forEach((sl, j) => { s.fl[j].x = bug.x + sl[0] * 30; s.fl[j].y = bug.y + sl[1] * 30; });
       if (s.t >= s.dur || bug.dead) s.phase = 'fly';
     } else {
       for (const f of s.fl) f.y -= 460 * dt;
@@ -969,13 +984,13 @@ function updateEffects(dt){
 function resolveKills(){
   const Z = [];
   for (const f of flowers) if (f.t <= f.delay + f.dur + 0.1) Z.push([f.x, f.y, f.t < f.delay ? f.R : flowerR(f)]);   // 먹는 순간부터 전체 범위로 적 제거
-  if (bug.shieldT > 0 && !bug.dead) Z.push([bug.x, bug.y, bug.r + 17]);
+  if (bug.shieldT > 0 && !bug.dead) Z.push([bug.x, bug.y, bug.r + 20]);
   for (const b of bees) Z.push([b.x, b.y, 37]);
   for (const b of babies) Z.push([b.x, b.y, 5]);
   for (const p of pills) Z.push([p.x, p.y, p.r]);
   for (const s of cosmosSets) for (const f of s.fl) Z.push([f.x, f.y, 11]);
   for (const c of cosmos2) Z.push([c.x, c.y, c.r]);
-  for (const c of clones) Z.push([c.x, c.y, 13]);
+  for (const c of clones) Z.push([c.x, c.y, 15]);
   if (!Z.length) return;
   for (const e of enemies){
     if (e.dead) continue;
@@ -1073,7 +1088,7 @@ function render(){
   for (const c of clones){
     ctx.globalAlpha = 0.6; drawLadybug(ctx, c.x, c.y, -Math.PI / 2, BUG_S, c.walk); ctx.globalAlpha = 1;
     ctx.save(); ctx.strokeStyle = '#fff'; ctx.setLineDash([3, 3]); ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.arc(c.x, c.y, 21, 0, TAU); ctx.stroke(); ctx.restore();
+    ctx.beginPath(); ctx.arc(c.x, c.y, 25, 0, TAU); ctx.stroke(); ctx.restore();
   }
   for (const it of field) drawFieldItem(it);
   for (const e of enemies) drawEnemy(e);
