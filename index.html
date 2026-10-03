@@ -625,17 +625,16 @@ function tiltVector(){
   else if (ang === 180){ x = -o.dg; y = -o.db; }
   return withFactor(x, y, tiltFactor(Math.hypot(x, y)));
 }
-// 기울기 각도 → 속도 배율: 2.5° 이하 정지, 30°에서 1배, 90°까지 계속 빨라져 3배
+// 기울기 각도 → 속도 배율: 2.5° 이하 정지, 많이 기울일수록 가파르게 빨라져 45°에서 최고(3배)
+// (손에 들고 기울일 수 있는 범위가 영점에서 40~50° 정도라 그 안에서 최고 속도가 나오게 함)
 function tiltFactor(deg){
   if (deg <= 2.5) return 0;
-  if (deg <= 30) return Math.pow((deg - 2.5) / 27.5, 1.3);
-  return 1 + 2 * Math.min(1, (deg - 30) / 60);
+  return 3 * Math.pow(Math.min(1, (deg - 2.5) / 42.5), 1.6);
 }
-// 터치로 끈 거리(px)를 기울기 각도로 바꿈: 55px = 30°, 120px = 90°(최고 속도)
+// 터치로 끈 거리(px)를 기울기 각도로 바꿈: 120px = 45°(최고 속도)
 function dragToDeg(d){
   if (d <= 4) return 0;
-  if (d <= 55) return 2.5 + (d - 4) / 51 * 27.5;
-  return 30 + Math.min(1, (d - 55) / 65) * 60;
+  return 2.5 + Math.min(1, (d - 4) / 116) * 42.5;
 }
 function withFactor(x, y, f){
   const m = Math.hypot(x, y);
@@ -852,7 +851,7 @@ function activate(kind){
 
 /* ---------- 업데이트 ---------- */
 function updateBug(dt){
-  const maxSp = 150 + settings.speed * 50;   // 30° 기준 속도(속도 3이면 300), 90°에서는 이 값의 3배
+  const maxSp = 150 + settings.speed * 50;   // 기본 속도(속도 3이면 300), 45° 이상 기울이면 이 값의 3배
   const inp = readInput(), k = Math.min(1, dt * 8);
   bug.vx += (inp[0] * maxSp - bug.vx) * k;
   bug.vy += (inp[1] * maxSp - bug.vy) * k;
